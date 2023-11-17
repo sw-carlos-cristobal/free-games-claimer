@@ -163,7 +163,7 @@ try {
     notify_games.push(notify_game); // status is updated below
     if (await page.locator('div:has-text("Link game account")').count() // TODO still needed? epic games store just has 'Link account' as the button text now.
        || await page.locator('div:has-text("Link account")').count()) {
-      console.error('  Account linking is required to  this offer!');
+      console.error('  Account linking is required to claim this offer!');
       notify_game.status = `failed: need account linking for ${store}`;
       db.data[user][title].status = 'failed: need account linking';
       // await page.pause();
@@ -172,7 +172,7 @@ try {
       // wait for https://www.epicgames.com/id/authorize?redirect_uri=https%3A%2F%2Fservice.link.amazon.gg...
       // await page.click('button[aria-label="Allow"]');
     } else {
-      db.data[user][title].status = 'ed';
+      db.data[user][title].status = 'claimed';
       // print code if there is one
       const redeem = {
         // 'origin': 'https://www.origin.com/redeem', // TODO still needed or now only via account linking?
