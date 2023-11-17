@@ -113,7 +113,7 @@ try {
     console.log('Current free game:', title);
     if (cfg.dryrun) continue;
     if (cfg.interactive && !await confirm()) continue;
-    await (await card.$('button:has-text("Claim")')).click();
+    await (await card.$('p:has-text("Claim")')).click();
     db.data[user][title] ||= { title, time: datetime(), store: 'internal' };
     notify_games.push({ title, status: 'claimed', url: URL_CLAIM });
     // const img = await (await card.$('img.tw-image')).getAttribute('src');
