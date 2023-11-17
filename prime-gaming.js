@@ -353,7 +353,7 @@ try {
         const linkAccountButton = page.locator('[data-a-target="LinkAccountButton"]');
         let unlinked_store;
         if (await linkAccountButton.count()) {
-          unlinked_store = await linkAccountButton.getAttribute('aria-label');
+          unlinked_store = await linkAccountButton.first().getAttribute('aria-label');
           console.debug('  LinkAccountButton label:', unlinked_store);
           const match = unlinked_store.match(/Link (.*) account/);
           if (match && match.length == 2) unlinked_store = match[1];
