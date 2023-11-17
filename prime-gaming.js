@@ -136,7 +136,7 @@ try {
     if (cfg.debug) await page.pause();
     if (cfg.dryrun) continue;
     if (cfg.interactive && !await confirm()) continue;
-    await Promise.any([page.click('button:has-text("Get game")'), page.click('button:has-text("Claim")'), page.click('button:has-text("Complete Claim")'), page.waitForSelector('div:has-text("Link game account")'), page.waitForSelector('.thank-you-title:has-text("Success")')]); // waits for navigation
+    await Promise.any([page.click('button:has-text("Get game")'), page.click('a:has-text("Claim")'), page.click('button:has-text("Complete Claim")'), page.waitForSelector('div:has-text("Link game account")'), page.waitForSelector('.thank-you-title:has-text("Success")')]); // waits for navigation
 
     // TODO would be simpler than the below, but will block for linked stores without code
     // const redeem_text = await page.textContent('text=/ code on /'); // FAQ: How do I redeem my code?
@@ -163,7 +163,7 @@ try {
     notify_games.push(notify_game); // status is updated below
     if (await page.locator('div:has-text("Link game account")').count() // TODO still needed? epic games store just has 'Link account' as the button text now.
        || await page.locator('div:has-text("Link account")').count()) {
-      console.error('  Account linking is required to claim this offer!');
+      console.error('  Account linking is required to  this offer!');
       notify_game.status = `failed: need account linking for ${store}`;
       db.data[user][title].status = 'failed: need account linking';
       // await page.pause();
@@ -172,7 +172,7 @@ try {
       // wait for https://www.epicgames.com/id/authorize?redirect_uri=https%3A%2F%2Fservice.link.amazon.gg...
       // await page.click('button[aria-label="Allow"]');
     } else {
-      db.data[user][title].status = 'claimed';
+      db.data[user][title].status = 'ed';
       // print code if there is one
       const redeem = {
         // 'origin': 'https://www.origin.com/redeem', // TODO still needed or now only via account linking?
@@ -348,7 +348,7 @@ try {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         // most games have a button 'Get in-game content'
         // epic-games: Fall Guys: Claim -> Continue -> Go to Epic Games (despite account linked and logged into epic-games) -> not tied to account but via some cookie?
-        await Promise.any([page.click('button:has-text("Get in-game content")'), page.click('button:has-text("Claim your gift")'), page.click('button:has-text("Claim")').then(() => page.click('button:has-text("Continue")'))]);
+        await Promise.any([page.click('button:has-text("Get in-game content")'), page.click('button:has-text("Claim your gift")'), page.click('a:has-text("Claim")').then(() => page.click('button:has-text("Continue")'))]);
         page.click('button:has-text("Continue")').catch(_ => { });
         const linkAccountButton = page.locator('[data-a-target="LinkAccountButton"]');
         let unlinked_store;
