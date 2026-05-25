@@ -11,7 +11,7 @@ console.log(datetime(), 'started checking gog');
 
 const db = await jsonDb('gog.json', {});
 
-if (cfg.width < 1280) { // otherwise 'Sign in' and #menuUsername are hidden (but attached to DOM), see https://github.com/vogler/free-games-claimer/issues/335
+if (cfg.width < 1280) { // otherwise 'Sign in' and username are hidden (but attached to DOM), see https://github.com/vogler/free-games-claimer/issues/335
   console.error(`Window width is set to ${cfg.width} but needs to be at least 1280 for GOG!`);
   process.exit(1);
 }
@@ -43,8 +43,28 @@ try {
   await page.goto(URL_CLAIM, { waitUntil: 'domcontentloaded' }); // default 'load' takes forever
 
   // page.click('#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll').catch(_ => { }); // does not work reliably, solved by setting CookieConsent above
-  const signIn = page.locator('a:has-text("Sign in")').first();
-  await Promise.any([signIn.waitFor(), page.waitForSelector('#menuUsername')]);
+
+  // GOG uses AngularJS with ng-show to toggle between anonymous (sign-in) and account (logged-in) menu items.
+  // .js-menu-anonymous is shown when not logged in; .js-menu-account is shown when logged in.
+  // #menuUsername was removed from the DOM in a 2025 redesign; username is now in .menu-account__user-name.
+  const signIn = page.locator('.menu-anonymous-header__btn--sign-in').first();
+  const accountMenu = page.locator('.js-menu-account');
+
+  // Wait for Angular to hydrate and show either the sign-in button or the account menu.
+  // Both elements are always in the DOM (ng-show toggles display), so we must wait for
+  // one to become *visible* — that signals Angular has finished evaluating login state.
+  // Use a shorter timeout so we fail fast with a clear message instead of hanging for 60s.
+  try {
+    await Promise.any([
+      signIn.waitFor({ state: 'visible', timeout: 30000 }),
+      accountMenu.waitFor({ state: 'visible', timeout: 30000 }),
+    ]);
+  } catch (e) {
+    console.error('Could not detect login state - neither sign-in button nor account menu appeared within 30s.');
+    console.error('GOG may have changed their page structure. Please check for updates.');
+    throw e;
+  }
+
   while (await signIn.isVisible()) {
     console.error('Not signed in anymore.');
     await signIn.click();
@@ -78,7 +98,7 @@ try {
         notify('gog: got captcha during login. Please check.');
         // TODO solve reCAPTCHA?
       }).catch(_ => { });
-      await page.waitForSelector('#menuUsername');
+      await accountMenu.waitFor({ state: 'visible' });
     } else {
       console.log('Waiting for you to login in the browser.');
       await notify('gog: no longer signed in and not enough options set for automatic login.');
@@ -88,10 +108,10 @@ try {
         process.exit(1);
       }
     }
-    await page.waitForSelector('#menuUsername');
+    await accountMenu.waitFor({ state: 'visible' });
     if (!cfg.debug) context.setDefaultTimeout(cfg.timeout);
   }
-  user = await page.locator('#menuUsername').first().textContent(); // innerText is uppercase due to styling!
+  user = await page.locator('.menu-account__user-name').first().textContent(); // innerText is uppercase due to styling!
   console.log(`Signed in as ${user}`);
   db.data[user] ||= {};
 
@@ -99,10 +119,49 @@ try {
   if (!await banner.count()) {
     console.log('Currently no free giveaway!');
   } else {
-    const text = await page.locator('.giveaway__content-header').innerText();
-    const match_all = text.match(/Claim (.*) and don't miss the|Success! (.*) was added to/);
-    const title = match_all[1] ? match_all[1] : match_all[2];
-    const url = await banner.locator('a').first().getAttribute('href');
+    // Giveaway content is loaded asynchronously by Angular. Wait for loading state to finish.
+    // The content starts as .giveaway__content--loading and transitions to showing the header.
+    const contentHeader = banner.locator('.giveaway__content-header');
+    try {
+      await contentHeader.waitFor({ timeout: 15000 });
+    } catch {
+      // Content didn't load in time. Try to extract title from the giveaway image alt text as fallback.
+      console.log('Giveaway banner found but content did not load in time.');
+    }
+
+    let title;
+    const slug = await banner.locator('a').first().getAttribute('href').catch(() => banner.getAttribute('href'));
+    let url = slug ? `https://www.gog.com${slug}` : null;
+
+    if (await contentHeader.count() && await contentHeader.isVisible()) {
+      // Primary: extract from the content header text (e.g., "Claim <title> and don't miss the..." or "Success! <title> was added to...")
+      const text = await contentHeader.innerText();
+      const match_all = text.match(/Claim (.*) and don't miss the|Success! (.*) was added to/);
+      if (match_all) {
+        title = match_all[1] ? match_all[1] : match_all[2];
+      }
+    }
+
+    if (!title) {
+      // Fallback: extract title from the giveaway image alt text (e.g., "Game Name giveaway")
+      try {
+        const imgAlt = await banner.locator('.giveaway__image img').first().getAttribute('alt');
+        if (imgAlt) {
+          title = imgAlt.replace(/\s*giveaway\s*$/i, '').trim();
+        }
+      } catch { /* image alt not available */ }
+    }
+
+    if (!title) {
+      // Last resort: extract from the overlay link URL (e.g., /en/game/game_slug)
+      if (url) {
+        const slug = url.split('/').pop();
+        title = slug ? slug.replace(/_/g, ' ') : 'Unknown Giveaway';
+      } else {
+        title = 'Unknown Giveaway';
+      }
+      console.log(`Could not extract giveaway title from page content, using: ${title}`);
+    }
     console.log(`Current free game: ${chalk.blue(title)} - ${url}`);
     db.data[user][title] ||= { title, time: datetime(), url };
     if (cfg.dryrun) process.exit(1);

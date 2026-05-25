@@ -76,9 +76,9 @@ ENV NOW=${NOW}
 
 LABEL org.opencontainers.image.title="free-games-claimer" \
       org.opencontainers.image.name="free-games-claimer" \
-      org.opencontainers.image.description="Automatically claims free games on the Epic Games Store, Amazon Prime Gaming and GOG" \
-      org.opencontainers.image.url="https://github.com/vogler/free-games-claimer" \
-      org.opencontainers.image.source="https://github.com/vogler/free-games-claimer" \
+      org.opencontainers.image.description="Automatically claims free games on the Epic Games Store, Prime Gaming (Luna) and GOG" \
+      org.opencontainers.image.url="https://github.com/sw-carlos-cristobal/free-games-claimer" \
+      org.opencontainers.image.source="https://github.com/sw-carlos-cristobal/free-games-claimer" \
       org.opencontainers.image.revision=${COMMIT} \
       org.opencontainers.image.ref.name=${BRANCH} \
       org.opencontainers.image.base.name="ubuntu:jammy" \
@@ -101,4 +101,4 @@ ENV SHOW 1
 # Script to setup display server & VNC is always executed.
 ENTRYPOINT ["docker-entrypoint.sh"]
 # Default command to run. This is replaced by appending own command, e.g. `docker run ... node prime-gaming` to only run this script.
-CMD node epic-games; node prime-gaming; node gog
+CMD node luna; node gog
