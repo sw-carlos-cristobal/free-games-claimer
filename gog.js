@@ -130,8 +130,8 @@ try {
     }
 
     let title;
-    const slug = await banner.locator('a').first().getAttribute('href').catch(() => banner.getAttribute('href'));
-    let url = slug ? `https://www.gog.com${slug}` : null;
+    const rawHref = await banner.locator('a').first().getAttribute('href').catch(() => banner.getAttribute('href'));
+    let url = rawHref?.startsWith('http') ? rawHref : rawHref ? `https://www.gog.com${rawHref}` : null;
 
     if (await contentHeader.count() && await contentHeader.isVisible()) {
       // Primary: extract from the content header text (e.g., "Claim <title> and don't miss the..." or "Success! <title> was added to...")

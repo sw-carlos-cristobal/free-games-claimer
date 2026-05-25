@@ -101,4 +101,4 @@ ENV SHOW 1
 # Script to setup display server & VNC is always executed.
 ENTRYPOINT ["docker-entrypoint.sh"]
 # Default command to run. This is replaced by appending own command, e.g. `docker run ... node prime-gaming` to only run this script.
-CMD node luna; node gog
+CMD bash -c "node luna; node gog; echo sleeping; sleep ${LOOP_INTERVAL:-4h}"

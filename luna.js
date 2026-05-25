@@ -96,11 +96,10 @@ try {
   }
 
   // ── Detect signed-in user ──
-  // Luna nav has: button "User dropdown and more options" containing the user's first name
+  // Luna nav has: button[aria-label="User dropdown and more options"] containing the user's first name
   try {
-    const userBtn = page.locator('button').filter({ hasText: /dropdown|more options/i }).first();
+    const userBtn = page.locator('button[aria-label*="User dropdown"], button[aria-label*="more options"]').first();
     if (await userBtn.count() > 0) {
-      // The button contains: NavProfile icon, user name text, AngleDown icon
       user = await userBtn.evaluate(btn => {
         for (const child of btn.children) {
           const text = child.textContent.trim();
@@ -111,15 +110,16 @@ try {
     }
   } catch (_) { }
   if (!user) {
+    // Fallback: find a nav button whose text is a short proper name (not a known UI label)
+    const skip = new Set(['sign in', 'all', 'claim games', 'claim game', 'play now', 'play game', 'en', 'get game']);
     try {
-      user = await page.evaluate(() => {
-        const navBtns = document.querySelectorAll('header button, nav button, [role="navigation"] button');
-        for (const btn of navBtns) {
+      user = await page.evaluate((skipSet) => {
+        for (const btn of document.querySelectorAll('nav button, [role="navigation"] button')) {
           const text = btn.textContent.trim();
-          if (text && !['Sign in', 'All', 'Claim games', 'Play Now'].includes(text) && text.length < 30) return text;
+          if (text && text.length < 20 && !skipSet.includes(text.toLowerCase())) return text;
         }
         return null;
-      });
+      }, [...skip]);
     } catch (_) { }
   }
   if (!user) user = 'unknown';
@@ -152,13 +152,10 @@ try {
   await page.waitForTimeout(500);
 
   // ── Collect claimable games ──
-  // Each claimable game card is a link element containing:
-  //   - A heading with the game title
-  //   - A nested link with text "Claim [game-name]" and href to /claims/...
-  // We specifically want links with href matching /claims/ (not /detail/ which are "Play Now" streaming games)
-  const claimLinks = await page.locator('a[href*="/claims/"]').filter({ hasText: /Claim/i }).all();
+  // Each game card has a heading with the title and a nested "Claim <title>" link.
+  // Target the inner claim links specifically to get clean titles and avoid duplicates.
+  const claimLinks = await page.locator('a[href*="/claims/"]').filter({ hasText: /^Claim /i }).all();
 
-  // Deduplicate by href to get unique games (each card may have the outer link + inner "Claim" link)
   const seenUrls = new Set();
   const games = [];
   for (const link of claimLinks) {
@@ -168,11 +165,26 @@ try {
     if (seenUrls.has(url)) continue;
     seenUrls.add(url);
 
-    // Try to extract the game title from the link text (e.g., "Claim Palindrome Syndrome" -> "Palindrome Syndrome")
-    const linkText = await link.innerText().catch(_ => '');
-    const title = linkText.replace(/^Claim\s+/i, '').trim() || url.split('/claims/')[1]?.split('/')[0] || 'Unknown';
+    // The inner claim link has text like "Claim Palindrome Syndrome: Escape Room"
+    // or a nearby heading has the clean title
+    let title;
+    try {
+      // First try: get the heading from the parent card element
+      const heading = link.locator('xpath=ancestor::*[.//h2 or .//h3]').first().locator('h2, h3').first();
+      if (await heading.count() > 0) {
+        title = await heading.innerText();
+      }
+    } catch (_) { }
+    if (!title) {
+      // Fallback: extract from "Claim <title>" link text
+      const linkText = await link.innerText().catch(_ => '');
+      title = linkText.replace(/^Claim\s+/i, '').replace(/\s*Claim game\s*$/i, '').trim();
+    }
+    if (!title) {
+      title = href.split('/claims/')[1]?.split('/')[0]?.replace(/-/g, ' ') || 'Unknown';
+    }
 
-    // Detect store from URL slug: "-gog" suffix = GOG, "-epic" suffix = Epic Games, else Amazon/internal
+    // Detect store from URL slug: "-gog" suffix = GOG, "-epic" suffix = Epic Games
     const slug = href.split('/claims/')[1]?.split('/')[0] || '';
     let store = 'amazon';
     if (slug.endsWith('-gog')) store = 'gog.com';
