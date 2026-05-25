@@ -165,23 +165,23 @@ try {
     if (seenUrls.has(url)) continue;
     seenUrls.add(url);
 
-    // The inner claim link has text like "Claim Palindrome Syndrome: Escape Room"
-    // or a nearby heading has the clean title
     let title;
     try {
-      // First try: get the heading from the parent card element
-      const heading = link.locator('xpath=ancestor::*[.//h2 or .//h3]').first().locator('h2, h3').first();
-      if (await heading.count() > 0) {
-        title = await heading.innerText();
-      }
+      // The claim link's aria-label is "Claim <Game Title>" — extract from there
+      const ariaLabel = await link.getAttribute('aria-label');
+      if (ariaLabel) title = ariaLabel.replace(/^Claim\s+/i, '').trim();
     } catch (_) { }
     if (!title) {
-      // Fallback: extract from "Claim <title>" link text
-      const linkText = await link.innerText().catch(_ => '');
-      title = linkText.replace(/^Claim\s+/i, '').replace(/\s*Claim game\s*$/i, '').trim();
+      try {
+        // Fallback: the parent card element has a heading with the game title
+        const card = link.locator('xpath=..');
+        const heading = card.locator('h1, h2, h3, h4, h5, h6').first();
+        if (await heading.count() > 0) title = await heading.innerText();
+      } catch (_) { }
     }
     if (!title) {
-      title = href.split('/claims/')[1]?.split('/')[0]?.replace(/-/g, ' ') || 'Unknown';
+      // Last resort: humanize the URL slug
+      title = href.split('/claims/')[1]?.split('/')[0]?.replace(/-gog$|-epic$/, '').replace(/-/g, ' ') || 'Unknown';
     }
 
     // Detect store from URL slug: "-gog" suffix = GOG, "-epic" suffix = Epic Games
