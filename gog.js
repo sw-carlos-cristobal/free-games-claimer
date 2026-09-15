@@ -101,7 +101,10 @@ try {
     if (!cfg.debug) context.setDefaultTimeout(cfg.timeout);
   }
   try {
-    user = (await accountMenu.textContent())?.trim() || 'unknown';
+    const accountInfo = await page.evaluate(() =>
+      fetch('https://menu.gog.com/v1/account/basic').then(r => r.json()).catch(() => null)
+    );
+    user = accountInfo?.username || 'unknown';
   } catch {
     user = 'unknown';
   }
