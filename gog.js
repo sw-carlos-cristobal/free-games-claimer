@@ -44,17 +44,23 @@ try {
 
   // page.click('#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll').catch(_ => { }); // does not work reliably, solved by setting CookieConsent above
 
-  const signIn = page.locator('a:has-text("Sign in"), [hook-test="menuAnonymousButton"], .menu-anonymous-header__btn--sign-in').first();
-  const loggedInSel = '#menuUsername, [hook-test="menuUsername"], .menu-username, .menu-username-text, .js-menu-account, a[href*="/account"]';
-  const accountMenu = page.locator(loggedInSel).first();
+  const signInSel = 'a:has-text("Sign in"), [hook-test="menuAnonymousButton"], .menu-anonymous-header__btn--sign-in';
+  const accountSel = '#menuUsername, [hook-test="menuUsername"], .menu-username, .menu-username-text, .js-menu-account, .menu-account__user-name';
+  const signIn = page.locator(signInSel).first();
+  const accountMenu = page.locator(accountSel).first();
 
-  await page.waitForTimeout(3000);
-  const isLoggedIn = async () => await accountMenu.count() > 0;
-  while (!await isLoggedIn()) {
+  // Wait for the page to hydrate and show either the sign-in or account menu.
+  try {
+    await Promise.any([
+      signIn.waitFor({ state: 'visible', timeout: 30000 }),
+      accountMenu.waitFor({ state: 'visible', timeout: 30000 }),
+    ]);
+  } catch {
+    console.error('Could not detect login state within 30s. GOG may have changed their page structure.');
+    throw new Error('GOG login state detection failed — neither sign-in button nor account menu became visible.');
+  }
+  while (await signIn.isVisible()) {
     console.error('Not signed in.');
-    if (await signIn.count() === 0) {
-      throw new Error('Could not find sign-in button. GOG page layout may have changed.');
-    }
     await signIn.click({ force: true });
     // it then creates an iframe for the login
     await page.waitForSelector('#GalaxyAccountsFrameContainer iframe'); // TODO needed?
@@ -86,7 +92,7 @@ try {
         notify('gog: got captcha during login. Please check.');
         // TODO solve reCAPTCHA?
       }).catch(_ => { });
-      await page.waitForSelector(loggedInSel);
+      await accountMenu.waitFor({ state: 'visible' });
     } else {
       console.log('Waiting for you to login in the browser.');
       await notify('gog: no longer signed in and not enough options set for automatic login.');
@@ -96,13 +102,12 @@ try {
         process.exit(1);
       }
     }
-    await page.waitForSelector(loggedInSel);
+    await accountMenu.waitFor({ state: 'visible' });
     if (!cfg.debug) context.setDefaultTimeout(cfg.timeout);
   }
-  const userSelectors = '#menuUsername, [hook-test="menuUsername"], .menu-username, .menu-username-text, .menu-account__user-name';
-  const userEl = page.locator(userSelectors).first();
+  const userEl = page.locator(accountSel).first();
   try {
-    await userEl.waitFor({ timeout: 10000 });
+    await userEl.waitFor({ state: 'visible', timeout: 10000 });
     user = await userEl.textContent();
   } catch {
     user = 'unknown';
