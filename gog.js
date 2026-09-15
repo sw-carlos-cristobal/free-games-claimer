@@ -44,9 +44,11 @@ try {
 
   // page.click('#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll').catch(_ => { }); // does not work reliably, solved by setting CookieConsent above
 
-  // :visible pseudo-class ensures .first() never pins to a hidden DOM duplicate
-  const signInSel = 'a:has-text("Sign in"):visible, [hook-test="menuAnonymousButton"]:visible, .menu-anonymous-header__btn--sign-in:visible';
-  const accountSel = '#menuUsername:visible, [hook-test="menuUsername"]:visible, .menu-username:visible, .menu-username-text:visible, .js-menu-account:visible, .menu-account__user-name:visible';
+  // GOG v3 menu uses menu-v3__top-bar-anonymous-only (logged out) and
+  // menu-v3__top-bar-logged-in-only (logged in) as visibility toggles.
+  // Legacy selectors kept as fallbacks; :visible prevents pinning to hidden duplicates.
+  const signInSel = '.menu-v3__top-bar-anonymous-only:visible, a:has-text("Sign in"):visible, [hook-test="menuAnonymousButton"]:visible, .menu-anonymous-header__btn--sign-in:visible';
+  const accountSel = '.menu-v3__top-bar-logged-in-only:visible, .menu-v3__button--avatar:visible, #menuUsername:visible, [hook-test="menuUsername"]:visible, .menu-username:visible, .js-menu-account:visible, .menu-account__user-name:visible';
   const signIn = page.locator(signInSel).first();
   const accountMenu = page.locator(accountSel).first();
 
