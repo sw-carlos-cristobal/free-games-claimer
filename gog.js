@@ -101,10 +101,20 @@ try {
     if (!cfg.debug) context.setDefaultTimeout(cfg.timeout);
   }
   try {
-    const accountInfo = await page.evaluate(() =>
-      fetch('https://menu.gog.com/v1/account/basic').then(r => r.json()).catch(() => null)
-    );
-    user = accountInfo?.username || 'unknown';
+    user = await page.evaluate(async () => {
+      for (const url of [
+        'https://menu.gog.com/v1/account/basic',
+        'https://www.gog.com/userData.json',
+        'https://embed.gog.com/userData.json',
+      ]) {
+        try {
+          const data = await fetch(url).then(r => r.json());
+          const name = data?.username || data?.userName || data?.name;
+          if (name) return name;
+        } catch { /* try next */ }
+      }
+      return 'unknown';
+    });
   } catch {
     user = 'unknown';
   }
