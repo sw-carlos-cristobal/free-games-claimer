@@ -44,16 +44,16 @@ try {
 
   // page.click('#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll').catch(_ => { }); // does not work reliably, solved by setting CookieConsent above
 
-  const signInSel = 'a:has-text("Sign in"), [hook-test="menuAnonymousButton"], .menu-anonymous-header__btn--sign-in';
-  const accountSel = '#menuUsername, [hook-test="menuUsername"], .menu-username, .menu-username-text, .js-menu-account, .menu-account__user-name';
+  // :visible pseudo-class ensures .first() never pins to a hidden DOM duplicate
+  const signInSel = 'a:has-text("Sign in"):visible, [hook-test="menuAnonymousButton"]:visible, .menu-anonymous-header__btn--sign-in:visible';
+  const accountSel = '#menuUsername:visible, [hook-test="menuUsername"]:visible, .menu-username:visible, .menu-username-text:visible, .js-menu-account:visible, .menu-account__user-name:visible';
   const signIn = page.locator(signInSel).first();
   const accountMenu = page.locator(accountSel).first();
 
-  // Wait for the page to hydrate and show either the sign-in or account menu.
   try {
     await Promise.any([
-      signIn.waitFor({ state: 'visible', timeout: 30000 }),
-      accountMenu.waitFor({ state: 'visible', timeout: 30000 }),
+      signIn.waitFor({ timeout: 30000 }),
+      accountMenu.waitFor({ timeout: 30000 }),
     ]);
   } catch {
     console.error('Could not detect login state within 30s. GOG may have changed their page structure.');
@@ -61,38 +61,31 @@ try {
   }
   while (await signIn.isVisible()) {
     console.error('Not signed in.');
-    await signIn.click({ force: true });
-    // it then creates an iframe for the login
-    await page.waitForSelector('#GalaxyAccountsFrameContainer iframe'); // TODO needed?
+    await signIn.click();
+    await page.waitForSelector('#GalaxyAccountsFrameContainer iframe');
     const iframe = page.frameLocator('#GalaxyAccountsFrameContainer iframe');
-    if (!cfg.debug) context.setDefaultTimeout(cfg.login_timeout); // give user some extra time to log in
+    if (!cfg.debug) context.setDefaultTimeout(cfg.login_timeout);
     console.info(`Login timeout is ${cfg.login_timeout / 1000} seconds!`);
     if (cfg.gog_email && cfg.gog_password) console.info('Using email and password from environment.');
     else console.info('Press ESC to skip the prompts if you want to login in the browser (not possible in headless mode).');
     const email = cfg.gog_email || await prompt({ message: 'Enter email' });
     const password = email && (cfg.gog_password || await prompt({ type: 'password', message: 'Enter password' }));
     if (email && password) {
-      iframe.locator('a[href="/logout"]').click().catch(_ => { }); // Click 'Change account' (email from previous login is set in some cookie)
+      iframe.locator('a[href="/logout"]').click().catch(_ => { });
       await iframe.locator('#login_username').fill(email);
       await iframe.locator('#login_password').fill(password);
       await iframe.locator('#login_login').click();
-      // handle MFA, but don't await it
       iframe.locator('form[name=second_step_authentication]').waitFor().then(async () => {
         console.log('Two-Step Verification - Enter security code');
         console.log(await iframe.locator('.form__description').innerText());
-        const otp = await prompt({ type: 'text', message: 'Enter two-factor sign in code', validate: n => n.toString().length == 4 || 'The code must be 4 digits!' }); // can't use type: 'number' since it strips away leading zeros and codes sometimes have them
+        const otp = await prompt({ type: 'text', message: 'Enter two-factor sign in code', validate: n => n.toString().length == 4 || 'The code must be 4 digits!' });
         await iframe.locator('#second_step_authentication_token_letter_1').pressSequentially(otp.toString(), { delay: 10 });
         await iframe.locator('#second_step_authentication_send').click();
-        await page.waitForTimeout(1000); // TODO still needed with wait for username below?
       }).catch(_ => { });
-      // iframe.locator('iframe[title=reCAPTCHA]').waitFor().then(() => {
-      // iframe.locator('.g-recaptcha').waitFor().then(() => {
       iframe.locator('text=Invalid captcha').waitFor().then(() => {
         console.error('Got a captcha during login (likely due to too many attempts)! You may solve it in the browser, get a new IP or try again in a few hours.');
         notify('gog: got captcha during login. Please check.');
-        // TODO solve reCAPTCHA?
       }).catch(_ => { });
-      await accountMenu.waitFor({ state: 'visible' });
     } else {
       console.log('Waiting for you to login in the browser.');
       await notify('gog: no longer signed in and not enough options set for automatic login.');
@@ -102,17 +95,14 @@ try {
         process.exit(1);
       }
     }
-    await accountMenu.waitFor({ state: 'visible' });
+    await accountMenu.waitFor();
     if (!cfg.debug) context.setDefaultTimeout(cfg.timeout);
   }
-  const userEl = page.locator(accountSel).first();
   try {
-    await userEl.waitFor({ state: 'visible', timeout: 10000 });
-    user = await userEl.textContent();
+    user = (await accountMenu.textContent())?.trim() || 'unknown';
   } catch {
     user = 'unknown';
   }
-  user = user?.trim() || 'unknown';
   console.log(`Signed in as ${user}`);
   db.data[user] ||= {};
 
